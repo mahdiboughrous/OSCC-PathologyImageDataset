@@ -1,0 +1,33 @@
+Patients: 1325
+Columns: 21
+
+REC distribution:
+  REC=0: 1050 (79.25%)
+
+  REC=1: 275 (20.75%)
+
+Split counts:
+split
+test     200
+train    925
+valid    200
+
+Feature columns:
+  Gender(0male/1female): 1325/1325 non-null
+  Age(Y): 1325/1325 non-null
+  Weight(kg): 1325/1325 non-null
+  Height(cm): 1325/1325 non-null
+  AlcoholHistory(0no/1yes): 1325/1325 non-null
+  SmokingHistory(0no/1yes): 1325/1325 non-null
+  BetelNutHistory(0no/1yes): 1325/1325 non-null
+  ASAGrade: 1325/1325 non-null
+  Surgery Site: 1325/1325 non-null
+  HPV(0/1): 1325/1325 non-null
+  Diabetes(0no/1yes): 1325/1325 non-null
+  RespiratoryDisease(0no/1yes): 1325/1325 non-null
+  CardiovascularDisease(0no/1yes): 1325/1325 non-null
+  MedControlledHypertension(0no/1yes): 1325/1325 non-null
+  TD: 1325/1325 non-null
+  TI: 1325/1325 non-null
+  CE: 1325/1325 non-null
+  PI: 1325/1325 non-null

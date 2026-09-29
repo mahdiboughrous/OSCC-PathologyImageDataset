@@ -1,0 +1,616 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=2cm,right=2cm]{geometry}
+\usepackage{fontspec}
+
+\usepackage[english,bidi=basic,provide=*]{babel}
+\babelprovide[import,onchar=ids fonts]{english}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{microtype}
+\usepackage{siunitx}
+\usepackage{enumitem}
+\usepackage{cite}
+\usepackage{hyperref}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue,
+    pdftitle={OSCC Recurrence Prediction},
+    pdfauthor={Mahdi Boughrous et al.}
+}
+
+\setlist[itemize]{leftmargin=1.6em}
+\setlist[enumerate]{leftmargin=1.8em}
+
+\newcommand{\ROC}{\text{ROC-AUC}}
+\newcommand{\AUPRC}{\text{AUPRC}}
+\newcommand{\Brier}{\text{Brier}}
+\newcommand{\OR}{\text{OR}}
+\newcommand{\aOR}{\text{aOR}}
+\newcommand{\cOR}{\text{cOR}}
+\newcommand{\CI}{\text{CI}}
+\newcommand{\RF}{\text{RF}}
+\newcommand{\LR}{\text{LR}}
+
+\title{\textbf{Decoupling Carcinogenic Etiology from Recurrence Dynamics in Oral Squamous Cell Carcinoma: An Empirical and Machine Learning Investigation}}
+
+\author{
+    \textbf{Mahdi Boughrous}, \textbf{Yassin Oulhammous}, \textbf{Yasmine El Asri},\\
+    \textbf{Mustapha Amarzoug}, \textbf{Mohamed Taha Benhassoun}\\[0.5em]
+    Facult\'{e} des Sciences et Techniques de B\'{e}ni Mellal (FSTBM)
+}
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Post-treatment surveillance in oral squamous cell carcinoma (OSCC) requires reliable pre-treatment risk stratification. This study assessed whether baseline clinical variables were associated with disease recurrence and whether biopsy-derived pathology features improved prediction beyond clinical variables alone. The analysis used the Multi-OSCC cohort of 1,325 patients, including 275 recurrence events (20.75\%). A pre-treatment modeling framework was applied to prevent target leakage. Associations were examined using non-parametric tests, effect sizes, and multivariable logistic regression. Machine-learning models, including Logistic Regression and Random Forest, were evaluated across Clinical-only, Pathology-only, and Combined feature configurations.
+
+Tumor Differentiation (TD) remained independently associated with recurrence in the adjusted logistic regression model (\aOR{} = 1.387, 95\% \CI{}: 1.125--1.711; $p=0.0022$). No statistically significant independent associations were detected for smoking, alcohol use, betel-nut use, or the measured systemic comorbidities. On the held-out test cohort ($n=200$; 49 recurrence events), the Pathology-only Random Forest achieved the highest observed \ROC{} of 0.627 (bootstrap 95\% \CI{}: 0.528--0.724) and the highest AUPRC of 0.406 (bootstrap 95\% \CI{}: 0.286--0.547). Clinical-only models achieved \ROC{} values of 0.534--0.537. Adding clinical variables to pathology features reduced global discrimination, although Combined Logistic Regression achieved the highest observed AUPRC (0.429) across all evaluated configurations and Combined Random Forest achieved the lowest \Brier{} score (0.239).
+
+At a threshold selected on the validation set to maximize F1 score, the Pathology Random Forest detected 41 of 49 recurrence events in the held-out test set (recall = 0.837), but specificity declined to 0.311. Paired bootstrap comparisons did not detect statistically significant differences in ROC-AUC between Pathology-only, Clinical-only, and Combined model configurations. Overall, pathology features contained stronger observed tabular prognostic signal than baseline clinical and exposure-history variables, but the moderate discrimination, substantial false-positive burden at high-sensitivity thresholds, and limited test-set precision support cautious interpretation and motivate external validation.
+\end{abstract}
+
+\section{Introduction}
+
+Oral cavity cancer is a substantial global health burden. Global estimates for 2020 reported approximately 377,000 incident cases and 177,000 deaths attributable to lip and oral cavity cancers \cite{sung2021}. Oral squamous cell carcinoma (OSCC) is the predominant histological malignancy of the oral cavity. Management commonly involves primary surgical resection, with neck dissection and adjuvant radiotherapy or chemoradiotherapy used according to pathological risk factors and clinical stage.
+
+Locoregional recurrence remains a major cause of treatment failure in OSCC. Recurrence frequency and post-recurrence outcomes vary substantially according to primary site, stage, surgical management, adjuvant treatment, pathological characteristics, and duration of follow-up \cite{almangush2020}. Better pre-treatment risk stratification may therefore help inform surgical planning, the use of adjuvant treatment, and the intensity of post-treatment surveillance.
+
+Tobacco use, alcohol consumption, and betel-quid exposure are established etiologic factors in oral carcinogenesis \cite{sung2021}. However, factors contributing to malignant transformation need not retain prognostic value for recurrence after primary treatment. Histopathological features may instead capture phenotypic properties related to invasion, differentiation, and aggressive tumor behavior. Prior work has associated tumor budding, cell cohesion, perineural invasion, and other morphological factors with recurrence and survival in OSCC \cite{almangush2020}.
+
+This study evaluates whether pre-treatment clinical variables predict OSCC recurrence and whether pathology-derived variables improve predictive performance beyond clinical variables alone. The analysis addresses three questions:
+\begin{enumerate}
+    \item \textbf{Etiologic versus recurrence factors:} Do exposure histories retain independent prognostic relevance after treatment, or is recurrence more closely associated with pathological phenotype?
+    \item \textbf{Tabular multimodal fusion:} How do ROC-AUC, AUPRC, calibration, and threshold-dependent performance change when clinical and pathological variables are concatenated?
+    \item \textbf{Feature representation:} What are the limitations of coarse pathology grades relative to richer representations derived from whole-slide histopathology images \cite{multioscc2024}?
+\end{enumerate}
+
+\section{Related Work}
+
+Prognostic evaluation in OSCC incorporates anatomical staging, histopathological features, and computational image analysis. The eighth edition of the American Joint Committee on Cancer (AJCC) staging system incorporated depth of invasion (DOI) for oral cavity tumors and extranodal extension (ENE) for nodal staging, reflecting the prognostic relevance of invasive depth and microscopic spread \cite{lydiatt2017}.
+
+Histopathological grading systems and invasive-pattern markers have been investigated extensively. Almangush et al.\ reviewed evidence linking tumor budding, cell cohesion, perineural invasion, and related features to recurrence and survival in OSCC \cite{almangush2020}. These findings support the clinical interest of morphology-derived predictors, particularly when they are available before definitive treatment.
+
+Machine-learning methods have also been evaluated for recurrence prediction in oral and head-and-neck cancer. Alabi et al.\ compared supervised classification approaches for predicting locoregional recurrence in early oral tongue cancer and highlighted both the potential and the limitations of structured clinical data for this task \cite{alabi2020}.
+
+Computer-vision methods using whole-slide images may capture tissue architecture and other spatial features unavailable in manually abstracted categorical variables. The Multi-OSCC benchmark reported high image-based recurrence-prediction performance under its published experimental protocol \cite{multioscc2024}. However, comparisons between tabular and image-based results require caution because prediction performance depends on cohort composition, target definition, model inputs, data partitions, image preprocessing, and validation procedures.
+
+\section{Dataset and Methodology}
+
+\subsection{Study Population and Outcome Definition}
+
+The analysis was conducted using the Multi-OSCC benchmark dataset, comprising 1,325 verified OSCC patients \cite{multioscc2024}. Clinical and pathological records were linked through patient identifiers. The primary outcome was binary disease recurrence during the available surveillance period:
+\begin{equation}
+P(\mathrm{REC}=1)=\frac{275}{1325}\approx 20.75\%.
+\end{equation}
+
+The non-recurrence group included 1,050 patients (79.25\%).
+
+\subsection{Information Timing and Leakage Prevention}
+
+A pre-treatment prediction framework was used. Variables recorded after surgical treatment or after recurrence manifestation were excluded to avoid target leakage:
+\begin{itemize}
+    \item \textbf{Post-resection variables:} Surgical margin status, flap reconstruction type, and postoperative tracheostomy.
+    \item \textbf{Adjuvant-treatment variables:} Postoperative radiotherapy and chemotherapy.
+    \item \textbf{Follow-up variables:} Recurrence-free interval and follow-up duration.
+\end{itemize}
+
+Missing values represented by \texttt{/} were converted to missing values. Table~\ref{tab:missingness} summarizes baseline missingness and preprocessing decisions.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Cohort Missingness Audit Across Baseline Variables ($N=1{,}325$).}
+\label{tab:missingness}
+\begin{tabularx}{\linewidth}{lrr>{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Variable} & \textbf{Missing ($n$)} & \textbf{Missing (\%)} & \textbf{Handling / Status} \\
+\midrule
+Demographics, comorbidities, site, pathology\textsuperscript{a} & 0 & 0.0 & Complete; no imputation \\
+Age (years) & 8 & 0.6 & Complete-case in logistic regression; median imputation in ML \\
+Weight (kg) & 10 & 0.8 & Median imputation for anthropometric processing \\
+Height (cm) & 45 & 3.4 & Median imputation for anthropometric processing \\
+BMI (kg/m\textsuperscript{2}) & 45 & 3.4 & Median imputation in ML \\
+HPV Status & 297 & 22.4 & Excluded owing to substantial missingness \\
+\bottomrule
+\multicolumn{4}{@{}p{\linewidth}@{}}{\footnotesize
+\textsuperscript{a} Includes gender, smoking, alcohol, betel nut, ASA classification, diabetes, cardiovascular disease, medicated hypertension, primary surgical site, and pathology grades TD, TI, CE, and PI.}
+\end{tabularx}
+\end{table}
+
+\subsection{Data Partitioning}
+
+The official patient partition (\texttt{split\_seed=2024.json}) was used:
+\begin{itemize}
+    \item \textbf{Training partition:} $n=925$ (69.81\%), used for imputation fitting, standardization, encoding, and classifier training.
+    \item \textbf{Validation partition:} $n=200$ (15.09\%), used for model development, calibration assessment, and threshold selection.
+    \item \textbf{Held-out test partition:} $n=200$ (15.09\%), reserved for final evaluation, bootstrap confidence intervals, paired comparisons, and threshold-performance reporting.
+\end{itemize}
+
+All preprocessing operations were fit exclusively on the training partition and then applied to the validation and held-out test partitions.
+
+\section{Statistical Inference}
+
+\subsection{Baseline Characteristics and Univariate Associations}
+
+Baseline characteristics stratified by recurrence status are shown in Table~\ref{tab:baseline}. Continuous variables were compared with the Mann--Whitney U test. Median differences were reported as descriptive effect sizes. Categorical variables were assessed using Pearson's chi-square test, with Cramér's $V$ used as an effect-size measure.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{3.5pt}
+\caption{Baseline Cohort Characteristics Stratified by OSCC Recurrence Status ($N=1{,}325$).}
+\label{tab:baseline}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lccccc@{}}
+\toprule
+\textbf{Variable} & \textbf{Overall} & \textbf{REC = 0} & \textbf{REC = 1} & \textbf{Effect} & \textbf{\textit{p}-value} \\
+ & ($n=1{,}325$) & ($n=1{,}050$) & ($n=275$) & \textbf{Size} & \\
+\midrule
+\multicolumn{6}{@{}l}{\textit{Continuous, median [IQR]}} \\
+Age (years) & 58.0 [50.0--68.0] & 59.0 [50.0--68.0] & 56.0 [47.0--65.0] & $\Delta=-3.0$ & 0.015 \\
+Weight (kg) & 60.0 [53.0--68.0] & 60.0 [53.0--69.0] & 58.0 [52.0--66.0] & $\Delta=-2.0$ & 0.018 \\
+Height (cm) & 165.0 [158.0--172.0] & 165.0 [158.0--172.0] & 164.0 [157.0--171.0] & $\Delta=-1.0$ & 0.655 \\
+BMI (kg/m$^2$) & 22.4 [20.1--25.1] & 22.5 [20.2--25.3] & 21.8 [19.8--24.5] & $\Delta=-0.7$ & 0.012 \\
+\addlinespace
+\multicolumn{6}{@{}l}{\textit{Categorical, n (\%)}} \\
+Male Gender & 876 (66.1\%) & 695 (66.7\%) & 181 (65.8\%) & $V=0.001$ & 0.965 \\
+Smoking History & 518 (39.1\%) & 416 (40.0\%) & 102 (37.1\%) & $V=0.019$ & 0.487 \\
+Alcohol History & 304 (22.9\%) & 243 (23.3\%) & 61 (22.2\%) & $V=0.007$ & 0.797 \\
+Betel Nut History & 85 (6.4\%) & 66 (6.3\%) & 19 (6.9\%) & $V=0.007$ & 0.812 \\
+ASA Grade & & & & $V=0.055$ & 0.413 \\
+\hspace*{1em}Grade 0 & 49 (3.7\%) & 43 (4.1\%) & 6 (2.2\%) & & \\
+\hspace*{1em}Grade 1 & 101 (7.6\%) & 75 (7.1\%) & 26 (9.5\%) & & \\
+\hspace*{1em}Grade 2 & 660 (49.8\%) & 520 (49.5\%) & 140 (50.9\%) & & \\
+\hspace*{1em}Grade 3 & 490 (37.0\%) & 392 (37.3\%) & 98 (35.6\%) & & \\
+\hspace*{1em}Grade 4 & 25 (1.9\%) & 20 (1.9\%) & 5 (1.8\%) & & \\
+Tumor Differentiation (TD) & & & & $V=0.111$ & $<0.001$ \\
+\hspace*{1em}Well & 450 (34.0\%) & 377 (35.9\%) & 73 (26.5\%) & & \\
+\hspace*{1em}Moderate & 692 (52.2\%) & 546 (52.0\%) & 146 (53.1\%) & & \\
+\hspace*{1em}Poor & 183 (13.8\%) & 127 (12.1\%) & 56 (20.4\%) & & \\
+Tumor Invasion (TI) & 618 (46.6\%) & 470 (44.8\%) & 148 (53.8\%) & $V=0.072$ & 0.009 \\
+Cancer Embolus (CE) & 112 (8.5\%) & 79 (7.5\%) & 33 (12.0\%) & $V=0.062$ & 0.024 \\
+Perineural Invasion (PI) & 244 (18.4\%) & 176 (16.8\%) & 68 (24.7\%) & $V=0.081$ & 0.003 \\
+Primary Surgery Site\textsuperscript{*} & & & & $V=0.133$ & $<0.001$ \\
+\hspace*{1em}Gingiva \& Jaw & 375 (28.3\%) & 270 (25.7\%) & 105 (38.2\%) & & \\
+\hspace*{1em}Tongue & 695 (52.5\%) & 566 (53.9\%) & 129 (46.9\%) & & \\
+\hspace*{1em}Buccal Mucosa & 123 (9.3\%) & 101 (9.6\%) & 22 (8.0\%) & & \\
+\hspace*{1em}Other & 132 (9.9\%) & 113 (10.8\%) & 19 (6.9\%) & & \\
+\bottomrule
+\end{tabular*}
+
+\vspace{0.1cm}
+\parbox{\linewidth}{\footnotesize
+\textit{Notes:} $\Delta$ denotes the median difference (REC = 1 minus REC = 0). $V$ denotes Cramér's $V$. \textsuperscript{*}Primary Surgery Site was tested across all six raw categories ($\chi^2=23.47$, $\mathrm{df}=5$, $p<0.001$); minority sub-sites were grouped as `Other' for reporting.}
+\end{table}
+
+Patients with recurrence were younger than those without recurrence (median: 56.0 versus 59.0 years; $p=0.0147$) and had lower median BMI (21.8 versus 22.5 kg/m$^2$; $p=0.0115$). Smoking, alcohol use, and betel-nut use had similar unadjusted distributions between recurrence groups.
+
+Pathology variables showed stronger unadjusted associations with recurrence. TD, TI, CE, and PI were associated with recurrence in contingency analyses. Primary surgical site was also associated with recurrence; gingiva and jaw tumors had an observed recurrence proportion of 28.0\% (105/375), compared with 18.6\% (129/695) for tongue tumors.
+
+\subsection{Univariate and Multivariable Logistic Regression}
+
+Univariate and multivariable logistic regression models were fitted to assess crude and adjusted associations with recurrence. The adjusted model was fitted on complete cases ($n=1{,}317$). Primary surgical site was excluded from the parametric regression model because sparse events in specific sub-sites generated quasi-complete separation. It was retained in machine-learning models through regularized one-hot encoding.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Univariate and Multivariable Logistic Regression Models for OSCC Recurrence ($n=1{,}317$).}
+\label{tab:mlr}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lccccc@{}}
+\toprule
+\textbf{Predictor Variable} & \textbf{Crude OR [95\% CI]} & \textbf{$p$-value} & \textbf{Adjusted OR} & \textbf{95\% CI} & \textbf{Adj. $p$-value} \\
+\midrule
+Intercept ($\beta_0$) & -- & -- & 0.350 & [0.166, 0.737] & 0.0057 \\
+Age (years) & 0.987 [0.977, 0.997] & 0.0135 & 0.988 & [0.977, 0.999] & 0.0306 \\
+Gender (Female vs.\ Male) & 0.993 [0.751, 1.314] & 0.9622 & 0.981 & [0.700, 1.376] & 0.9136 \\
+Smoking History (Yes vs.\ No) & 0.887 [0.676, 1.164] & 0.3871 & 0.822 & [0.568, 1.191] & 0.3012 \\
+Alcohol History (Yes vs.\ No) & 0.938 [0.684, 1.286] & 0.6923 & 0.940 & [0.639, 1.384] & 0.7545 \\
+Betel Nut History (Yes vs.\ No) & 1.103 [0.655, 1.859] & 0.7135 & 1.119 & [0.631, 1.983] & 0.7013 \\
+ASA Physical Status & 1.058 [0.893, 1.254] & 0.5126 & 1.003 & [0.831, 1.210] & 0.9764 \\
+Diabetes Mellitus & 1.332 [0.908, 1.954] & 0.1432 & 1.363 & [0.918, 2.022] & 0.1244 \\
+Cardiovascular Disease & 0.984 [0.612, 1.583] & 0.9472 & 1.018 & [0.616, 1.683] & 0.9438 \\
+Tumor Differentiation (TD) & 1.458 [1.206, 1.763] & 0.0001 & \textbf{1.387} & \textbf{[1.125, 1.711]} & \textbf{0.0022} \\
+Tumor Invasion (TI) & 1.435 [1.096, 1.879] & 0.0087 & 1.262 & [0.919, 1.732] & 0.1499 \\
+Cancer Embolus (CE) & 1.683 [1.099, 2.578] & 0.0165 & 1.413 & [0.904, 2.211] & 0.1294 \\
+Perineural Invasion (PI) & 1.621 [1.183, 2.222] & 0.0027 & 1.198 & [0.820, 1.749] & 0.3501 \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\linewidth]{forest_plot_odds_ratios.png}
+\caption{Adjusted odds ratios from the multivariable logistic regression model ($n=1{,}317$). Points represent adjusted odds ratios and horizontal lines represent 95\% confidence intervals. The dashed vertical line indicates the null value of 1.0.}
+\label{fig:forest}
+\end{figure}
+
+Although TI, CE, and PI were associated with recurrence in univariate models, their adjusted associations attenuated and their 95\% confidence intervals included the null value. TD remained independently associated with recurrence (\aOR{} = 1.387, 95\% \CI{}: 1.125--1.711; $p=0.0022$). Age showed a small inverse adjusted association with recurrence (\aOR{} = 0.988 per year; $p=0.0306$).
+
+\section{Machine Learning Experiments}
+
+\subsection{Feature Sets and Classifier Design}
+
+Models were evaluated across three feature configurations:
+\begin{enumerate}
+    \item \textbf{Clinical-only:} Age, BMI, smoking, alcohol use, betel-nut use, ASA grade, diabetes, cardiovascular disease, medicated hypertension, and primary surgical site.
+    \item \textbf{Pathology-only:} TD, TI, CE, and PI.
+    \item \textbf{Combined:} The union of Clinical-only and Pathology-only features.
+\end{enumerate}
+
+Two classifiers were implemented:
+\begin{itemize}
+    \item \textbf{Logistic Regression (LR):} An $L_2$-regularized linear classifier.
+    \item \textbf{Random Forest (RF):} An ensemble of 200 decision trees with maximum depth restricted to four.
+\end{itemize}
+
+Class imbalance was addressed using balanced class weights. Continuous variables were median-imputed and standardized using training-set parameters. Categorical variables were one-hot encoded, with unknown test categories ignored during transformation.
+
+\subsection{Model Discrimination and Calibration}
+
+Table~\ref{tab:performance} reports held-out test-set performance ($n=200$, including 49 recurrence events).
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Model Performance Evaluation on the Held-Out Test Cohort ($n=200$).}
+\label{tab:performance}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lcccccc@{}}
+\toprule
+\textbf{Model Architecture} & \textbf{Feature Modality} & \textbf{ROC-AUC} & \textbf{AUPRC} & \textbf{F1} & \textbf{Recall} & \textbf{Brier} \\
+\midrule
+Logistic Regression & Clinical & 0.537 & 0.333 & 0.371 & 0.571 & 0.259 \\
+Random Forest & Clinical & 0.534 & 0.334 & 0.415 & 0.551 & 0.244 \\
+Logistic Regression & Pathology & 0.618 & 0.329 & 0.386 & 0.571 & 0.246 \\
+Random Forest & Pathology & \textbf{0.627} & 0.406 & 0.400 & \textbf{0.633} & 0.241 \\
+Logistic Regression & Combined & 0.564 & \textbf{0.429} & 0.340 & 0.490 & 0.254 \\
+Random Forest & Combined & 0.557 & 0.373 & 0.347 & 0.429 & \textbf{0.239} \\
+\midrule[\heavyrulewidth]
+\textit{Published image benchmark\textsuperscript{a}} & \textit{Histopathology} & \textit{0.947} & -- & -- & -- & -- \\
+\bottomrule
+\end{tabular*}
+
+\vspace{0.15cm}
+\parbox{\linewidth}{\footnotesize
+\textsuperscript{a} Published benchmark reported by the Multi-OSCC Consortium \cite{multioscc2024}. The image-model result was not reproduced locally and should not be interpreted as a direct head-to-head comparison unless data partitions, endpoint definitions, preprocessing, and validation procedures are shown to be equivalent.}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{roc_curves.png}
+    \caption{Receiver operating characteristic curves.}
+    \label{fig:roc}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{calibration_curves.png}
+    \caption{Calibration curves for Random Forest models.}
+    \label{fig:calibration}
+\end{subfigure}
+\caption{Discrimination and calibration on the held-out test partition ($n=200$). Panel (a) presents ROC curves for the six tabular configurations. Panel (b) presents calibration curves for the Random Forest models.}
+\label{fig:eval}
+\end{figure}
+
+Clinical-only models showed weak observed discrimination, with \ROC{} values of 0.537 for LR and 0.534 for RF. Pathology-only models achieved the highest observed \ROC{} values, reaching 0.618 for LR and 0.627 for RF. The Pathology RF configuration also achieved the highest observed recall at the default threshold of 0.50 (0.633).
+
+Adding clinical variables to pathology features reduced observed \ROC{}. However, Combined LR achieved the highest AUPRC (0.429), and Combined RF achieved the lowest \Brier{} score (0.239). These metrics describe different model properties and should not be interpreted as interchangeable measures of clinical utility.
+
+\subsection{Threshold Selection and Confusion-Matrix Performance}
+
+Threshold-dependent performance was evaluated on the held-out test set. For the primary analysis, a default classification threshold of 0.50 was used. In addition, a threshold was selected on the validation partition by maximizing F1 score for the Pathology RF model and then applied without modification to the held-out test set.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\caption{Threshold-Based Classification Performance on the Held-Out Test Set ($n=200$).}
+\label{tab:threshold}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lcccccccccc@{}}
+\toprule
+\textbf{Model} & \textbf{Threshold} & \textbf{TP} & \textbf{FP} & \textbf{TN} & \textbf{FN} & \textbf{Precision} & \textbf{Recall} & \textbf{Specificity} & \textbf{NPV} & \textbf{F1} \\
+\midrule
+Clinical LR & 0.50 & 28 & 74 & 77 & 21 & 0.275 & 0.571 & 0.510 & 0.786 & 0.371 \\
+Pathology RF & 0.50 & 31 & 75 & 76 & 18 & 0.292 & 0.633 & 0.503 & 0.809 & 0.400 \\
+Combined LR & 0.50 & 24 & 68 & 83 & 25 & 0.261 & 0.490 & 0.550 & 0.769 & 0.340 \\
+Pathology RF & Validation-selected & 41 & 104 & 47 & 8 & 0.283 & 0.837 & 0.311 & 0.855 & 0.423 \\
+\bottomrule
+\end{tabular*}
+
+\vspace{0.15cm}
+\parbox{\linewidth}{\footnotesize
+\textit{Notes:} TP = true positives; FP = false positives; TN = true negatives; FN = false negatives; NPV = negative predictive value. The validation-selected threshold was chosen by maximizing F1 score in the validation partition.}
+\end{table}
+
+At the default threshold of 0.50, Pathology RF detected 31 of 49 recurrence events (recall = 0.633) and correctly classified 76 of 151 non-recurrence cases (specificity = 0.503). Applying the validation-selected threshold increased recall to 0.837, corresponding to detection of 41 recurrence events and eight missed recurrences. This higher sensitivity was accompanied by a marked reduction in specificity to 0.311 and 104 false-positive classifications among 151 non-recurrence cases.
+
+This sensitivity--specificity trade-off may be relevant in a surveillance context if high-risk classification triggers low-harm additional assessment rather than immediate invasive treatment. However, the acceptability of this operating point depends on the clinical consequences of missed recurrence, the burden of false-positive surveillance, patient preferences, resource availability, and prospective clinical validation.
+
+\subsection{Bootstrap Confidence Intervals}
+
+Non-parametric bootstrap resampling with 1,000 replications was used to quantify uncertainty in ROC-AUC and AUPRC on the held-out test set.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Bootstrap Confidence Intervals for Selected Held-Out Test-Set Metrics.}
+\label{tab:bootstrap}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lccccc@{}}
+\toprule
+\textbf{Model} & \textbf{ROC-AUC} & \textbf{95\% CI} & \textbf{AUPRC} & \textbf{95\% CI} & \textbf{Brier} \\
+\midrule
+Pathology RF & 0.627 & [0.528, 0.724] & 0.406 & [0.286, 0.547] & 0.241 \\
+Pathology LR & 0.618 & [0.524, 0.710] & 0.329 & [0.239, 0.457] & 0.246 \\
+Clinical RF & 0.534 & [0.437, 0.634] & 0.334 & [0.235, 0.467] & 0.244 \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+Pathology RF achieved the highest observed ROC-AUC and AUPRC among the models included in this bootstrap analysis. However, the bootstrap confidence intervals were wide, indicating substantial sampling uncertainty in the held-out cohort.
+
+\subsection{Paired AUC Comparisons}
+
+Because all models were evaluated using predictions from the same held-out patients, paired bootstrap comparisons were performed for ROC-AUC differences.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Paired Bootstrap Comparisons of Held-Out Test ROC-AUC.}
+\label{tab:paired_auc}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lcccc@{}}
+\toprule
+\textbf{Comparison} & \textbf{AUC Difference} & \textbf{95\% CI} & \textbf{$p$-value} & \textbf{Significant} \\
+\midrule
+Pathology RF vs.\ Combined RF & +0.069 & [-0.018, 0.160] & 0.128 & No \\
+Pathology LR vs.\ Combined LR & +0.054 & [-0.042, 0.155] & 0.290 & No \\
+Pathology RF vs.\ Clinical RF & +0.092 & [-0.033, 0.213] & 0.168 & No \\
+\bottomrule
+\end{tabular*}
+
+\vspace{0.15cm}
+\parbox{\linewidth}{\footnotesize
+\textit{Notes:} Positive differences favor the first model in each comparison. Confidence intervals and $p$-values were estimated using paired bootstrap resampling of held-out test-set predictions.}
+\end{table}
+
+Although Pathology RF had higher observed ROC-AUC values than the compared models, the confidence intervals for all pairwise differences included zero. Therefore, the available test set did not provide sufficient precision to establish statistically significant differences in ROC-AUC between these model configurations.
+
+\subsection{Random Seed Robustness}
+
+To evaluate sensitivity to algorithmic randomness, the Pathology RF model was re-estimated using three random seeds while keeping the data partition, preprocessing strategy, and hyperparameters unchanged.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Random Seed Robustness of the Pathology Random Forest.}
+\label{tab:seed}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Random Seed} & \textbf{ROC-AUC} & \textbf{AUPRC} \\
+\midrule
+2024 & 0.627 & 0.406 \\
+42 & 0.627 & 0.407 \\
+123 & 0.633 & 0.405 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Observed ROC-AUC ranged from 0.627 to 0.633 and AUPRC ranged from 0.405 to 0.407. These results indicate that the estimated Pathology RF performance was stable across the evaluated random seeds under the specified configuration.
+
+\subsection{Decision-Curve Analysis}
+
+Decision-curve analysis was conducted over threshold probabilities from 0.05 to 0.50 to examine the potential clinical utility of model-guided surveillance decisions. Figure~\ref{fig:dca} compares model-based net benefit with default treat-all and treat-none strategies.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.84\linewidth]{decision_curve_analysis.png}
+\caption{Decision-curve analysis across threshold probabilities from 0.05 to 0.50. Net benefit is presented relative to treat-all and treat-none strategies. Interpretation depends on the clinical action associated with a high-risk classification and the relative consequences of false-positive and false-negative decisions.}
+\label{fig:dca}
+\end{figure}
+
+Decision-curve analysis provides a threshold-dependent assessment of potential utility rather than proof of clinical effectiveness. If a model demonstrates higher net benefit than both default strategies across a clinically relevant range, its use could be considered for future prospective evaluation. Clinical adoption would still require external validation, explicit definition of downstream surveillance actions, assessment of patient-centered outcomes, and evaluation of resource implications.
+
+\section{Discussion}
+
+\subsection{Etiologic Factors and Recurrence Dynamics}
+
+Tobacco use, alcohol consumption, and betel-quid exposure are established etiologic factors for oral carcinogenesis \cite{sung2021}. In the present cohort, however, no statistically significant independent association was detected between these baseline exposure histories and recurrence after adjustment for the variables included in the multivariable model. This does not establish that exposure histories have no effect on recurrence; rather, it indicates that the current study did not detect independent associations under the available sample size, covariate definitions, and model specification.
+
+TD remained independently associated with recurrence in the adjusted logistic regression analysis. This observation is consistent with evidence that pathological indicators of differentiation, invasion, and tumor microarchitecture may contain prognostic information in OSCC \cite{almangush2020}. Nevertheless, this retrospective observational analysis cannot establish causality, and TD alone should not be used as a clinical risk classifier without further validation.
+
+\subsection{Feature Concatenation and Random Forest Feature Sampling}
+
+The addition of clinical variables to pathology variables reduced the observed RF ROC-AUC from 0.627 to 0.557. One possible explanation relates to random feature-subspace sampling in Random Forests \cite{breiman2001}. For a forest evaluating $m=\lfloor\sqrt{p}\rfloor$ candidate features per split, the probability that TD is available in a candidate subset can be calculated from the number of features $p$.
+
+With four pathology variables and $m=2$:
+\begin{equation}
+P(\mathrm{TD\ sampled}\mid p=4,m=2)
+=
+1-\frac{\binom{3}{2}}{\binom{4}{2}}
+=
+0.500.
+\end{equation}
+
+With 13 combined variables and $m=3$:
+\begin{equation}
+P(\mathrm{TD\ sampled}\mid p=13,m=3)
+=
+1-\frac{\binom{12}{3}}{\binom{13}{3}}
+=
+\frac{3}{13}
+\approx 0.231.
+\end{equation}
+
+This calculation provides a plausible explanation for why expanding the feature space may reduce the frequency with which a strongly informative feature is considered at individual splits. However, it does not prove that feature-subspace sampling caused the performance decrease. Sampling variability, weak signal in added clinical variables, feature redundancy, hyperparameter settings, and unmodeled interactions may also contribute.
+
+\subsection{Discrimination, Precision--Recall, Calibration, and Operating Thresholds}
+
+ROC-AUC, AUPRC, Brier score, and threshold-dependent classification metrics quantify different model properties. ROC-AUC describes global ranking discrimination across possible thresholds. AUPRC emphasizes performance for positive predictions and can be particularly informative in datasets with an imbalanced outcome distribution \cite{saito2015}. The Brier score measures average squared probability error \cite{brier1950}.
+
+The Pathology RF model achieved the highest observed ROC-AUC and AUPRC among the models assessed with bootstrap intervals. At the default threshold of 0.50, it detected 31 of 49 recurrence events. At the validation-selected F1 threshold, it detected 41 of 49 recurrence events, corresponding to recall of 0.837. This improvement in sensitivity was associated with a substantial false-positive burden: 104 of 151 non-recurrence cases were classified as high risk.
+
+A high-recall operating threshold could be considered in a surveillance setting if classification as high risk leads to relatively low-harm follow-up, such as more frequent review, imaging, or clinical examination. It would be less acceptable if it directly triggered high-risk surgery, toxic therapy, or other burdensome interventions. Threshold selection should therefore be determined by clinical consequences, patient preferences, surveillance resources, and prospective utility studies rather than statistical metrics alone.
+
+\subsection{Tabular Pathology and Whole-Slide Imaging}
+
+The tabular pathology models achieved moderate discrimination, whereas the published Multi-OSCC image benchmark reported higher image-based performance under its own experimental protocol \cite{multioscc2024}. One possible explanation is that whole-slide images contain spatial and morphological information not represented by coarse categorical features, including tumor--stroma organization, cellular heterogeneity, inflammatory infiltration, and invasive growth patterns \cite{almangush2020}.
+
+However, the present models should not be interpreted as directly inferior to the published image benchmark without confirming that the patient population, outcome definition, patient-level partitions, slide selection procedures, and validation protocol are identical. Future work should compare tabular and image-based approaches under a unified patient-level evaluation protocol and investigate whether multimodal fusion improves discrimination, calibration, and clinical utility.
+
+\subsection{Limitations}
+
+Several limitations should be considered:
+\begin{itemize}
+    \item \textbf{Observational design:} The study evaluates statistical associations and predictive performance; it does not establish causal relationships.
+    \item \textbf{Single-center source population:} Local care pathways, pathology reporting practices, and patient characteristics may limit generalizability.
+    \item \textbf{Coarse pathological representation:} TD, TI, CE, and PI were represented as categorical variables and may not capture the complete morphological information visible in biopsy slides.
+    \item \textbf{Missing HPV status:} HPV status was excluded owing to 22.4\% missingness, preventing robust assessment of its possible contribution.
+    \item \textbf{Limited held-out event count:} The test set included 49 recurrence events, resulting in wide confidence intervals and limited precision for distinguishing modest differences between models.
+    \item \textbf{No external validation:} The reported estimates require evaluation in independent external cohorts.
+    \item \textbf{Threshold dependence:} Recall, specificity, precision, and F1 score depend on the chosen probability threshold. Although the optimized threshold was selected using the validation partition, its performance may vary in external populations.
+    \item \textbf{Decision-curve assumptions:} Decision-curve analysis represents threshold-based net benefit under assumed trade-offs between false positives and false negatives. It does not demonstrate improved patient outcomes.
+\end{itemize}
+
+\section{Conclusion}
+
+This study evaluated pre-treatment recurrence prediction in OSCC using structured clinical and pathology-derived variables. Baseline clinical, lifestyle, and comorbidity variables demonstrated weak observed discrimination on the held-out test cohort. In contrast, pathology features provided stronger, though still moderate, predictive signal, and TD remained independently associated with recurrence in multivariable logistic regression.
+
+The Pathology RF model produced the highest observed ROC-AUC and AUPRC among the models assessed with bootstrap uncertainty estimates. However, paired bootstrap comparisons did not establish statistically significant ROC-AUC differences between evaluated model configurations. A validation-selected threshold increased recurrence detection to 83.7\%, but generated a substantial false-positive burden.
+
+These findings support further evaluation of pathology-informed risk models, richer pathological feature representations, and rigorously validated multimodal approaches. Before clinical implementation, models should undergo external validation, calibration assessment, prospective threshold analysis, decision-curve evaluation, and examination of their effect on patient outcomes and healthcare resource use.
+
+\appendix
+
+\section{Technical Appendix and Reproducibility Documentation}
+
+\subsection{Feature Matrix Across Model Configurations}
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\caption{Comprehensive Feature Matrix Across Statistical and Machine Learning Models.}
+\label{tab:feature_matrix}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lcccccc@{}}
+\toprule
+\textbf{Feature Name} & \textbf{Type} & \textbf{Missing} & \textbf{Imputation / Preproc.} & \textbf{MLR} & \textbf{Clinical ML} & \textbf{Pathology ML} \\
+\midrule
+Age (years) & Continuous & 8 (0.6\%) & Median + z-score & Included & Included & Excluded \\
+Weight (kg) & Continuous & 10 (0.8\%) & Median; used for BMI & Excluded & Excluded & Excluded \\
+Height (cm) & Continuous & 45 (3.4\%) & Median; used for BMI & Excluded & Excluded & Excluded \\
+BMI (kg/m$^2$) & Continuous & 45 (3.4\%) & Median + z-score & Excluded & Included & Excluded \\
+Gender & Binary & 0 (0.0\%) & None & Included & Included & Excluded \\
+Smoking History & Binary & 0 (0.0\%) & None & Included & Included & Excluded \\
+Alcohol History & Binary & 0 (0.0\%) & None & Included & Included & Excluded \\
+Betel Nut History & Binary & 0 (0.0\%) & None & Included & Included & Excluded \\
+ASA Physical Status & Categorical & 0 (0.0\%) & One-hot encoded & Included & Included & Excluded \\
+Primary Surgery Site & Categorical & 0 (0.0\%) & One-hot encoded & Excluded\textsuperscript{*} & Included & Excluded \\
+Diabetes Mellitus & Binary & 0 (0.0\%) & None & Included & Included & Excluded \\
+Cardiovascular Disease & Binary & 0 (0.0\%) & None & Included & Included & Excluded \\
+Respiratory Disease & Binary & 0 (0.0\%) & None & Excluded & Excluded & Excluded \\
+Medicated Hypertension & Binary & 0 (0.0\%) & None & Excluded & Included & Excluded \\
+HPV Status & Binary & 297 (22.4\%) & Excluded & Excluded & Excluded & Excluded \\
+Tumor Differentiation (TD) & Ordinal & 0 (0.0\%) & Grades 0, 1, 2 & Included & Excluded & Included \\
+Tumor Invasion (TI) & Binary & 0 (0.0\%) & None & Included & Excluded & Included \\
+Cancer Embolus (CE) & Binary & 0 (0.0\%) & None & Included & Excluded & Included \\
+Perineural Invasion (PI) & Binary & 0 (0.0\%) & None & Included & Excluded & Included \\
+\bottomrule
+\end{tabular*}
+
+\vspace{0.15cm}
+\parbox{\linewidth}{\footnotesize
+\textsuperscript{*}Primary Surgery Site was excluded from parametric MLR because sparse events in minority sites generated quasi-complete separation. It was retained in machine-learning models through regularized one-hot encoding. Combined ML models used the union of Clinical ML and Pathology ML variables.}
+\end{table}
+
+\subsection{Preprocessing Pipeline}
+
+Continuous variables used in machine-learning models were median-imputed and standardized using parameters estimated exclusively from the training partition:
+\begin{equation}
+z=\frac{x-\mu_{\mathrm{train}}}{\sigma_{\mathrm{train}}}.
+\end{equation}
+
+Categorical variables were encoded through one-hot encoding. Unknown categories encountered in validation or test data were ignored during transformation. All preprocessing estimators were fit using only the training partition ($n=925$).
+
+\subsection{Hyperparameter Configuration}
+
+\begin{itemize}
+    \item \textbf{Logistic Regression:} Solver = \texttt{lbfgs}; penalty = $L_2$; regularization parameter $C=1.0$; maximum iterations = 1,000; class weights = \texttt{balanced}; random seed = 2024.
+    \item \textbf{Random Forest:} Number of estimators = 200; maximum depth = 4; minimum samples per split = 5; minimum samples per leaf = 2; splitting criterion = Gini impurity; bootstrap sampling enabled; class weights = \texttt{balanced}; random seed = 2024.
+    \item \textbf{Bootstrap analysis:} 1,000 resamples with replacement from the held-out test cohort. Percentile confidence intervals used the 2.5th and 97.5th percentiles.
+\end{itemize}
+
+\subsection{Code Availability}
+
+The analysis scripts are organized as follows:
+\begin{itemize}
+    \item \texttt{src/01\_prepare\_data.py}: Data ingestion, verification, and split mapping.
+    \item \texttt{src/02\_statistics.py}: Cohort characteristics, contingency analyses, and logistic regression.
+    \item \texttt{src/03\_machine\_learning.py}: Classifier training and performance evaluation.
+    \item \texttt{src/04\_figures.py}: Bootstrapping, ROC curves, calibration curves, decision-curve analysis, and forest plots.
+\end{itemize}
+
+Code and processed tables are available at:
+\url{https://github.com/mahdiboughrous/OSCC-Recurrence-Prediction}.
+
+\begin{thebibliography}{99}
+
+\bibitem{sung2021}
+H.~Sung, J.~Ferlay, R.~L.~Siegel, M.~Laversanne, I.~Soerjomataram, A.~Jemal, and F.~Bray.
+\newblock Global cancer statistics 2020: GLOBOCAN estimates of incidence and mortality worldwide for 36 cancers in 185 countries.
+\newblock \emph{CA: A Cancer Journal for Clinicians}, 71(3):209--249, 2021.
+\newblock doi:10.3322/caac.21660.
+
+\bibitem{almangush2020}
+A.~Almangush, I.~Leivo, and A.~A.~M{\"a}kitie.
+\newblock Biomarkers for predicting recurrence and survival in oral squamous cell carcinoma: A comprehensive review.
+\newblock \emph{Oral Oncology}, 104:104627, 2020.
+\newblock doi:10.1016/j.oraloncology.2020.104627.
+
+\bibitem{alabi2020}
+R.~O.~Alabi, M.~Elmusrati, I.~Sawazaki-Calone, L.~P.~Kowalski, C.~Haglund, R.~D.~Coletta, A.~M{\"a}kitie, T.~Salo, A.~Almangush, I.~Leivo, et~al.
+\newblock Comparison of supervised machine learning classification techniques in prediction of locoregional recurrences in early oral tongue cancer.
+\newblock \emph{International Journal of Medical Informatics}, 136:104068, 2020.
+\newblock doi:10.1016/j.ijmedinf.2019.104068.
+
+\bibitem{lydiatt2017}
+W.~M.~Lydiatt, S.~G.~Patel, B.~O'Sullivan, et~al.
+\newblock Head and neck cancers: Major changes in the American Joint Committee on Cancer eighth edition cancer staging manual.
+\newblock \emph{CA: A Cancer Journal for Clinicians}, 67(2):122--137, 2017.
+\newblock doi:10.3322/caac.21389.
+
+\bibitem{multioscc2024}
+Multi-OSCC Consortium.
+\newblock Multi-OSCC: A multimodal clinical and histopathology benchmark dataset for oral squamous cell carcinoma prognostication.
+\newblock In \emph{Medical Image Computing and Computer Assisted Intervention (MICCAI)}, pages 102--114, 2024.
+
+\bibitem{breiman2001}
+L.~Breiman.
+\newblock Random forests.
+\newblock \emph{Machine Learning}, 45:5--32, 2001.
+\newblock doi:10.1023/A:1010933404324.
+
+\bibitem{saito2015}
+T.~Saito and M.~Rehmsmeier.
+\newblock The precision-recall plot is more informative than the ROC plot when evaluating binary classifiers on imbalanced datasets.
+\newblock \emph{PLoS ONE}, 10(3):e0118432, 2015.
+\newblock doi:10.1371/journal.pone.0118432.
+
+\bibitem{brier1950}
+G.~W.~Brier.
+\newblock Verification of forecasts expressed in terms of probability.
+\newblock \emph{Monthly Weather Review}, 78(1):1--3, 1950.
+\newblock doi:10.1175/1520-0493(1950)078<0001:VOFEIT>2.0.CO;2.
+
+\end{thebibliography}
+
+\end{document}

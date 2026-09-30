@@ -192,7 +192,7 @@ ci_df.to_csv("results/tables/bootstrap_confidence_intervals.csv", index=False)
 print("\nSaved results/tables/bootstrap_confidence_intervals.csv")
 print(ci_df.round(4).to_string(index=False))
 
-# ---- 7. DeLong-style paired AUC comparison (bootstrap diff) -------------
+# ---- 7. Paired bootstrap AUC comparison ----------------------------------
 def paired_auc_test(probs_a, probs_b, y_true, n_boot=1000):
     auc_a = roc_auc_score(y_true, probs_a)
     auc_b = roc_auc_score(y_true, probs_b)
@@ -223,16 +223,16 @@ comparisons = [
     ("Pathology LR", "Clinical LR", "LR: Pathology vs Clinical"),
 ]
 
-delong_results = []
+bootstrap_results = []
 for na, nb, label in comparisons:
     r = paired_auc_test(probs_all[na], probs_all[nb], y_test)
     r["Comparison"] = label
-    delong_results.append(r)
+    bootstrap_results.append(r)
 
-delong_df = pd.DataFrame(delong_results)
-delong_df.to_csv("results/tables/delong_pairwise_comparisons.csv", index=False)
-print("\nSaved results/tables/delong_pairwise_comparisons.csv")
-print(delong_df.round(4).to_string(index=False))
+bootstrap_df = pd.DataFrame(bootstrap_results)
+bootstrap_df.to_csv("results/tables/bootstrap_pairwise_auc_comparisons.csv", index=False)
+print("\nSaved results/tables/bootstrap_pairwise_auc_comparisons.csv")
+print(bootstrap_df.round(4).to_string(index=False))
 
 # ---- 8. Decision-curve analysis -----------------------------------------
 def net_benefit(y_true, probs, threshold):

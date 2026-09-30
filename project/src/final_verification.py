@@ -143,6 +143,7 @@ def fit_models(train, valid, test):
         pipe.fit(train[num + cat], train["REC"])
         fitted[name] = pipe
         predictions[name] = {
+            "train": pipe.predict_proba(train[num + cat])[:, 1],
             "valid": pipe.predict_proba(valid[num + cat])[:, 1],
             "test": pipe.predict_proba(test[num + cat])[:, 1],
         }
@@ -191,11 +192,10 @@ def brier_and_calibration(y_by_split, predictions):
         prevalence = float(np.mean(y))
         null_brier = prevalence * (1 - prevalence)
         rows.append({"Model": "Prevalence-only null", "Dataset/split": split, "Event prevalence": prevalence, "Model Brier score": np.nan, "Null Brier score": null_brier, "Brier skill score": np.nan, "Interpretation": "prevalence-only benchmark"})
-        if split == "test":
-            for name, pred in predictions.items():
-                model_brier = brier_score_loss(y, pred[split])
-                skill = 1 - model_brier / null_brier
-                rows.append({"Model": name, "Dataset/split": split, "Event prevalence": prevalence, "Model Brier score": model_brier, "Null Brier score": null_brier, "Brier skill score": skill, "Interpretation": "better than prevalence-only benchmark" if skill > 0 else "worse than prevalence-only benchmark"})
+        for name, pred in predictions.items():
+            model_brier = brier_score_loss(y, pred[split])
+            skill = 1 - model_brier / null_brier
+            rows.append({"Model": name, "Dataset/split": split, "Event prevalence": prevalence, "Model Brier score": model_brier, "Null Brier score": null_brier, "Brier skill score": skill, "Interpretation": "better than prevalence-only benchmark" if skill > 0 else "worse than prevalence-only benchmark"})
     pd.DataFrame(rows).to_csv(TABLES / "brier_benchmark_comparison.csv", index=False)
 
     rng = np.random.default_rng(SEED)
@@ -205,6 +205,28 @@ def brier_and_calibration(y_by_split, predictions):
         intercept, slope, boot_i, boot_s = calibration_metrics(y_test, pred["test"], rng)
         cal_rows.append({"Model": name, "Split": "test", "Calibration intercept": intercept, "Calibration slope": slope, "Intercept CI low": np.percentile(boot_i, 2.5), "Intercept CI high": np.percentile(boot_i, 97.5), "Slope CI low": np.percentile(boot_s, 2.5), "Slope CI high": np.percentile(boot_s, 97.5), "Test events": int(y_test.sum()), "Fitting method": "Binomial GLM with logit(predicted probability) as offset for intercept; Binomial GLM with intercept and logit(predicted probability) covariate for slope", "Clipping": f"probabilities clipped to [{CLIP_EPSILON}, {1 - CLIP_EPSILON}] only for logit transforms", "Interpretation": "exploratory; only 49 test events"})
     pd.DataFrame(cal_rows).to_csv(TABLES / "calibration_metrics_test.csv", index=False)
+
+    y_test = y_by_split["test"]
+    plt.figure(figsize=(8, 6))
+    for name in ["Clinical RF", "Pathology RF", "Combined RF"]:
+        probs = predictions[name]["test"]
+        bins = np.linspace(0, 1, 6)
+        mean_predicted, observed = [], []
+        for low, high in zip(bins[:-1], bins[1:]):
+            mask = (probs >= low) & (probs < high if high < 1 else probs <= high)
+            if np.any(mask):
+                mean_predicted.append(float(probs[mask].mean()))
+                observed.append(float(y_test[mask].mean()))
+        plt.plot(mean_predicted, observed, marker="o", label=name, lw=1.8)
+    plt.plot([0, 1], [0, 1], "k--", label="Perfect calibration", lw=1)
+    plt.xlabel("Mean predicted probability")
+    plt.ylabel("Observed recurrence fraction")
+    plt.title("Calibration Curves (Random Forest Models; Test Cohort, n=200)")
+    plt.legend(loc="upper left", frameon=True)
+    plt.figtext(0.5, 0.01, "Exploratory calibration assessment; only 49 test events.", ha="center", fontsize=8)
+    plt.tight_layout(rect=(0, 0.04, 1, 1))
+    plt.savefig(FIGURES / "calibration_curves.png", dpi=300)
+    plt.close()
 
 
 def classification_metrics(y, probs, threshold):
@@ -234,6 +256,24 @@ def threshold_audits(y_valid, y_test, predictions):
     pd.DataFrame(rows).to_csv(TABLES / "threshold_selection_audit.csv", index=False)
     pd.DataFrame(cm_rows).to_csv(TABLES / "confusion_matrices_test.csv", index=False)
     return selected
+
+
+def core_metric_comparison(y_test, predictions):
+    rows = []
+    old = pd.read_csv(TABLES / "full_evaluation.csv") if (TABLES / "full_evaluation.csv").exists() else pd.DataFrame()
+    for name, pred in predictions.items():
+        probs = pred["test"]
+        metrics = {
+            "ROC-AUC": roc_auc_score(y_test, probs),
+            "AUPRC": average_precision_score(y_test, probs),
+            "Brier": brier_score_loss(y_test, probs),
+        }
+        threshold_row = old[(old["Model"] == name) & (old["Threshold"] == 0.5)] if not old.empty else pd.DataFrame()
+        for metric, value in metrics.items():
+            old_column = "AUC" if metric == "ROC-AUC" else metric
+            old_value = float(threshold_row.iloc[0][old_column]) if not threshold_row.empty and old_column in threshold_row else np.nan
+            rows.append({"Model": name, "Metric": metric, "Regenerated value": value, "Previously reported value": old_value, "Difference": value - old_value if not np.isnan(old_value) else np.nan})
+    pd.DataFrame(rows).to_csv(TABLES / "core_metric_reproducibility.csv", index=False)
 
 
 def bootstrap_audit():
@@ -371,6 +411,7 @@ All outputs are under `results/`:
 - `tables/td_coding_audit.csv`
 - `tables/brier_benchmark_comparison.csv`
 - `tables/calibration_metrics_test.csv`
+- `tables/core_metric_reproducibility.csv`
 - `tables/threshold_selection_audit.csv`
 - `tables/confusion_matrices_test.csv`
 - `tables/bootstrap_method_audit.csv`
@@ -380,6 +421,7 @@ All outputs are under `results/`:
 - `tables/followup_availability_audit.csv`
 - `tables/verification_environment.csv`
 - `figures/decision_curve_analysis.png`
+- `figures/calibration_curves.png`
 
 The single regeneration command is:
 
@@ -395,10 +437,11 @@ def main():
     df = clean_data()
     counts, overlaps = audit_split(df)
     train, valid, test = [df[df["split"] == split].copy() for split in ("train", "valid", "test")]
-    count_rows, _ = transformed_feature_audits(fit_models(train, valid, test)[0]["Pathology LR"].named_steps["preprocessor"].transformers and train)
     fitted, predictions = fit_models(train, valid, test)
+    count_rows, _ = transformed_feature_audits(fitted, train)
     td_audit(df, fitted)
     brier_and_calibration({"train": train["REC"].to_numpy(), "valid": valid["REC"].to_numpy(), "test": test["REC"].to_numpy()}, predictions)
+    core_metric_comparison(test["REC"].to_numpy(), predictions)
     selected = threshold_audits(valid["REC"].to_numpy(), test["REC"].to_numpy(), predictions)
     bootstrap_audit()
     paired_bootstrap(test["REC"].to_numpy(), predictions)

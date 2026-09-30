@@ -58,6 +58,16 @@ pip install -r requirements.txt
   <img src="./Visualizations/results_visualization_def.png" width="500" alt="图2">
 </p>
 
+## Final verification
+
+Run the reproducible final audit from `project` with:
+
+```
+..\\.venv\\Scripts\\python.exe src\\final_verification.py
+```
+
+It preserves the official 925/200/200 patient-level split and writes verification tables, figures, and the final report under `project/results/`. Paired AUC comparisons are patient-level bootstrap comparisons exported as `bootstrap_pairwise_auc_comparisons.csv`; they are not DeLong tests.
+
 ## Cite this work
 If you use this dataset, please cite the following paper:
 ```

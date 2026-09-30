@@ -142,15 +142,15 @@ print()
 
 print('8. PAIRED AUC COMPARISON')
 print('-' * 70)
-delong = pd.read_csv('C:/Users/Betagors/PycharmProjects/OSCC-PathologyImageDataset/project/results/tables/delong_pairwise_comparisons.csv')
+bootstrap_comparisons = pd.read_csv('C:/Users/Betagors/PycharmProjects/OSCC-PathologyImageDataset/project/results/tables/bootstrap_pairwise_auc_comparisons.csv')
 print('  Method: BOOTSTRAPPED paired comparison (NOT DeLong test)')
 print()
 print('  Results:')
-for _, row in delong.iterrows():
+for _, row in bootstrap_comparisons.iterrows():
     sig = 'SIGNIFICANT' if row['p_value'] < 0.05 else 'not significant'
     print(f'    {row["Comparison"]:30s}: diff={row["diff"]:.4f}, p={row["p_value"]:.3f} ({sig})')
 print()
-print('  RESULT: File name is MISLEADING (should be bootstrap, not DeLong)')
+print('  RESULT: Bootstrap comparison filename and method are explicit; no DeLong claim is made')
 print()
 
 print('=' * 70)
@@ -168,7 +168,7 @@ print()
 print('MEDIUM PRIORITY:')
 print('  4. Calibration metrics (intercept, slope) not reported')
 print('  5. Bootstrap procedure is conditional, not full uncertainty')
-print('  6. File named delong_pairwise_comparisons.csv is misnamed')
+print('  6. Paired AUC comparison is reported as bootstrap, not DeLong')
 print()
 print('LOWER PRIORITY:')
 print('  7. Cannot verify follow-up duration for non-recurrence cases')

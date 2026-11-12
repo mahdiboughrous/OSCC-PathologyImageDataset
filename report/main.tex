@@ -109,15 +109,15 @@ Prof. Hicham Moussa
 
 \hline
 
-Mohamed Taha Benhassoun & Biology & -- \\
-
-Mustapha Amarzoug & Organic Chemistry & 3BIO \\
-
-Yasmine Elasri & Mathematics & Lab. MPA \\
+Yassin Oulhammous & Artificial Intelligence & Lab. TIAD \\
 
 Mahdi Boughrous & Artificial Intelligence & Lab. TIAD \\
 
-Yassin Oulhammous & Artificial Intelligence & Lab. TIAD \\
+Yasmine Elasri & Mathematics & Lab. MPA \\
+
+Mohamed Taha Benhassoun & Biology & -- \\
+
+Mustapha Amarzoug & Organic Chemistry & 3BIO \\
 
 \hline
 
@@ -524,6 +524,24 @@ The study has several limitations:
 In this retrospective OSCC recurrence analysis, pathology-derived variables provided stronger observed ranking information than the clinical, lifestyle, and comorbidity variables evaluated in the held-out cohort. Because TD, TI, CE, and PI are derived from surgical specimens, these results should not be described as pre-treatment prediction. Tumor Differentiation remained associated with recurrence in adjusted logistic regression, and Pathology RF achieved the highest observed tabular \ROC{}.
 
 However, discrimination was moderate, pairwise model differences were not statistically established, and the predicted probabilities were not well aligned with the prevalence scale under the calibration analysis. A validation-selected high-recall threshold substantially increased false-positive classifications, illustrating the trade-off between missed recurrences and additional follow-up workload. These models should therefore be interpreted as exploratory tools for risk stratification rather than clinically deployable recurrence predictors. External validation, recalibration, standardized follow-up definitions, and prospective evaluation of clinically meaningful surveillance strategies are necessary.
+
+\section{Team Member Contributions}
+
+In accordance with institutional guidelines and following the Contributor Roles Taxonomy (CRediT), the individual contributions of the team members to this interdisciplinary mini-project are detailed below:
+
+\begin{itemize}
+    \item \textbf{Yassin Oulhammous} (\textit{Specialization: Artificial Intelligence, Lab. TIAD}): Model calibration and uncertainty quantification (Brier score benchmarking, logistic calibration intercepts and slopes); threshold optimization via validation-set F1 maximization; Decision Curve Analysis (DCA) and net benefit evaluation; creation of high-resolution scientific visualizations (forest plot, ROC curves, calibration curves, decision curves); verification pipeline execution.
+    
+    \item \textbf{Mahdi Boughrous} (\textit{Specialization: Artificial Intelligence, Lab. TIAD}): Machine learning architecture and experimental design; implementation of scikit-learn preprocessing, imputation, and one-hot encoding pipelines; training and hyperparameter configuration of regularized Logistic Regression and Random Forest classifiers; evaluation across discrimination metrics ($\ROC{}$, $\AUPRC{}$, F1-score, recall, specificity); manuscript drafting and \LaTeX{} integration.
+    
+    \item \textbf{Yasmine Elasri} (\textit{Specialization: Mathematics, Lab. MPA}): Mathematical modeling and statistical analysis pipeline; formulation of hypothesis testing protocols (Mann--Whitney $U$ tests, Pearson $\chi^2$ contingency tests, Cram\'er's $V$ effect size calculations); specification and fitting of multivariable logistic regression models; odds ratio estimation and bootstrap confidence interval computation; validation of mathematical consistency.
+    
+    \item \textbf{Mohamed Taha Benhassoun} (\textit{Specialization: Biology}): Clinical and biological conceptualization; synthesis of oral oncology literature; biological evaluation of lifestyle risk factors (tobacco, alcohol, betel quid) versus recurrence etiology; clinical interpretation of histopathological determinants; co-authoring the introduction and clinical discussion sections.
+    
+    \item \textbf{Mustapha Amarzoug} (\textit{Specialization: Organic Chemistry, Lab. 3BIO}): Biochemical literature review; investigation of chemical carcinogens and cellular microenvironment factors influencing tumor invasiveness; verification of domain terminology and biological plausibility; critical review of study hypotheses and manuscript revision.
+\end{itemize}
+
+\paragraph{Supervision:} The project was conducted under the academic supervision of \textbf{Prof.~Aziz OUHINOU} and \textbf{Prof.~Hicham MOUSSA} (Facult\'e des Sciences et Techniques de B\'eni Mellal, Universit\'e Sultan Moulay Slimane), who provided methodological guidance, critical review, and project oversight.
 
 \bibliographystyle{unsrt}
 \bibliography{refs}
